@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Project Astra · 第1集 · 前世梦境</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Noto Serif SC','SimSun','STSong',serif;user-select:none}
+canvas{position:fixed;top:0;left:0;width:100%;height:100%}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+.letterbox{position:fixed;left:0;width:100%;background:#000;z-index:11;pointer-events:none}
+.letterbox.top{top:0;height:8vh}
+.letterbox.bottom{bottom:0;height:8vh}
+.subtitle{position:fixed;bottom:18vh;left:50%;transform:translateX(-50%);color:#e8d5b0;font-size:clamp(16px,2.5vw,28px);text-align:center;letter-spacing:.15em;text-shadow:0 0 20px rgba(200,160,80,.6);z-index:12;opacity:0;transition:opacity .6s;max-width:85vw;line-height:1.7}
+.subtitle.show{opacity:1}
+.titlecard{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:13;opacity:0;text-align:center}
+.titlecard.show{opacity:1}
+.titlecard h1{font-size:clamp(28px,5vw,56px);color:#d4a853;letter-spacing:.3em;text-shadow:0 0 30px rgba(212,168,83,.8),0 0 60px rgba(212,168,83,.4);margin:0;line-height:1.4}
+.titlecard .sub{font-size:clamp(14px,2vw,20px);color:#b8956a;letter-spacing:.2em;margin-top:1.5vh}
+.titlecard .ep{font-size:clamp(12px,1.5vw,16px);color:#8a7050;letter-spacing:.4em;margin-top:.8vh}
+.skip{position:fixed;bottom:3vh;right:3vw;z-index:20;color:#666;font-size:12px;cursor:pointer;letter-spacing:.1em}
+.skip:hover{color:#999}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="letterbox top"></div><div class="letterbox bottom"></div>
+<div class="subtitle" id="sub"></div>
+<div class="titlecard" id="titlecard">
+  <div class="ep">PROJECT ASTRA</div>
+  <h1>前世梦境</h1>
+  <div class="sub">Past Life Dream</div>
+</div>
+<div class="skip" onclick="skipToEnd()">跳过 ▸</div>
+
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const sub=document.getElementById('sub');
+const titlecard=document.getElementById('titlecard');
+let W,H;
+
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+
+// === STATE ===
+let t=0, beatIdx=0, beatStart=0, particles=[], stars=[];
+let shakeX=0,shakeY=0,shakeDuration=0;
+let vignetteAlpha=0.55;
+let flashAlpha=0;
+
+// Starfield init
+for(let i=0;i<120;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.6,r:Math.random()*1.3+0.3,a:Math.random()*0.6+0.3});
+
+function spawnParticles(x,y,count,color,spd,life,size){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2,s=Math.random()*spd+spd*0.3;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:Math.random()*life+life*0.4,maxLife:life,color,size:Math.random()*size+size*0.5});
+  }
+}
+
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+
+function drawParticles(){
+  for(const p of particles){
+    const a=p.life/p.maxLife;
+    ctx.globalAlpha=a*0.8;ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size*a,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// === BEATS ===
+const beats=[
+  // Beat 0: Opening shockwave (0-6s)
+  {start:0,end:6, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     // Background: dark battlefield
+     const grad=ctx.createRadialGradient(W*0.5,H*0.4,0,W*0.5,H*0.4,W*1.2);
+     grad.addColorStop(0,'#1a1020');grad.addColorStop(0.5,'#0a0510');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Ground
+     ctx.fillStyle='#0d0a14';ctx.fillRect(0,H*0.68,W,H*0.32);
+     // Stars
+     for(const s of stars){ctx.globalAlpha=s.a*0.4;ctx.fillStyle='#c8b8d8';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill()}
+     ctx.globalAlpha=1;
+     // Dark god silhouette - grows as shockwave
+     const dgSize=0.3+bt*0.25;
+     const dgGrad=ctx.createRadialGradient(W*0.5,H*0.3,dgSize*W*0.05,W*0.5,H*0.3,dgSize*W*0.5);
+     dgGrad.addColorStop(0,'#2a1040');dgGrad.addColorStop(0.3,'#1a0828');dgGrad.addColorStop(0.7,'#0a0315');dgGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=dgGrad;ctx.beginPath();ctx.arc(W*0.5,H*0.3,dgSize*W*0.5,0,Math.PI*2);ctx.fill();
+     // Dark god core
+     ctx.fillStyle='#3a1850';ctx.beginPath();ctx.arc(W*0.5,H*0.3,dgSize*W*0.12,0,Math.PI*2);ctx.fill();
+     // Shockwave ring
+     if(bt>0.15){
+       const swProgress=(bt-0.15)/0.85;
+       ctx.strokeStyle=`rgba(100,30,140,${(1-swProgress)*0.7})`;
+       ctx.lineWidth=3*(1-swProgress);
+       ctx.beginPath();ctx.arc(W*0.5,H*0.3,swProgress*W*0.7,0,Math.PI*2);ctx.stroke();
+     }
+     // Three figures - small silhouettes at bottom
+     if(bt>0.25){
+       const fAlpha=Math.min(1,(bt-0.25)*3);
+       ctx.fillStyle=`rgba(200,180,160,${fAlpha*0.7})`;
+       // Hero (center)
+       ctx.fillRect(W*0.47,H*0.66,8,H*0.1);
+       ctx.fillRect(W*0.46,H*0.63,12,3);
+       // Archmage (left)
+       ctx.fillStyle=`rgba(140,160,200,${fAlpha*0.7})`;
+       ctx.fillRect(W*0.35,H*0.65,6,H*0.12);
+       ctx.fillRect(W*0.345,H*0.61,7,3);
+       // Heroine (right)
+       ctx.fillStyle=`rgba(220,180,200,${fAlpha*0.7})`;
+       ctx.fillRect(W*0.58,H*0.67,5,H*0.08);
+       ctx.fillRect(W*0.575,H*0.63,6,2.5);
+     }
+   }
+  },
+  // Beat 0b: Hero knocked back (6-10s)
+  {start:6,end:10, text:"黑暗神冲击波——英雄被击飞，大法师后退三步",
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createRadialGradient(W*0.5,H*0.4,0,W*0.5,H*0.4,W*1.2);
+     grad.addColorStop(0,'#1a1028');grad.addColorStop(0.5,'#0a0515');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     ctx.fillStyle='#0d0a14';ctx.fillRect(0,H*0.68,W,H*0.32);
+     // Dark god
+     const dgGrad=ctx.createRadialGradient(W*0.5,H*0.3,0,W*0.5,H*0.3,W*0.55);
+     dgGrad.addColorStop(0,'#2a1040');dgGrad.addColorStop(0.5,'#1a0828');dgGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=dgGrad;ctx.beginPath();ctx.arc(W*0.5,H*0.3,W*0.55,0,Math.PI*2);ctx.fill();
+     // Hero knocked back
+     if(bt<0.6){
+       const heroX=W*0.5+(bt/0.6)*W*0.25;
+       ctx.fillStyle='#c8b4a0';ctx.fillRect(heroX-4,H*0.66,8,H*0.1);
+       ctx.fillRect(heroX-3,H*0.63,6,3);
+       // Motion lines
+       ctx.strokeStyle='rgba(255,200,150,0.5)';
+       for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(heroX+10+i*12,H*0.7);ctx.lineTo(heroX+35+i*12,H*0.7);ctx.stroke()}
+     }
+     // Archmage
+     if(bt>0.2){
+       const mageX=W*0.32-Math.min(bt-0.2,1)*W*0.05;
+       ctx.fillStyle='#8ca0c8';ctx.fillRect(mageX-3,H*0.67,6,H*0.1);
+       ctx.fillRect(mageX-2,H*0.63,4,3);
+     }
+     // Heroine - only slight stumble
+     if(bt>0.4){
+       const herX=W*0.62+Math.sin(bt*8)*W*0.015;
+       ctx.fillStyle='#dcb4c8';ctx.fillRect(herX-2.5,H*0.68,5,H*0.08);
+       ctx.fillRect(herX-2,H*0.64,4,2.5);
+       // subtle purple glow hint
+       if(bt>0.6){
+         ctx.fillStyle='rgba(120,40,160,0.15)';
+         ctx.beginPath();ctx.arc(herX,H*0.64,15,0,Math.PI*2);ctx.fill();
+       }
+     }
+   }
+  },
+  // Beat 0c: Archmage line + heroine silence (10-14s)
+  {start:10,end:14, text:"「站起来，愣着干嘛」——大法师",
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.45,W*1.2);
+     grad.addColorStop(0,'#151020');grad.addColorStop(0.6,'#0a0512');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     ctx.fillStyle='#0d0a14';ctx.fillRect(0,H*0.7,W,H*0.3);
+     // Dark god dimmed
+     const dgGrad=ctx.createRadialGradient(W*0.5,H*0.25,W*0.1,W*0.5,H*0.25,W*0.4);
+     dgGrad.addColorStop(0,'rgba(40,15,60,0.6)');dgGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=dgGrad;ctx.beginPath();ctx.arc(W*0.5,H*0.25,W*0.4,0,Math.PI*2);ctx.fill();
+     // Hero on ground getting up
+     const heroX=W*0.5+Math.sin(bt*Math.PI)*W*0.15;
+     ctx.fillStyle='#c8b4a0';
+     ctx.fillRect(heroX-4,H*0.72,8,3);ctx.fillRect(heroX-3,H*0.66,6,H*0.06);
+     // Archmage close-up
+     ctx.fillStyle='rgba(140,160,200,0.9)';
+     ctx.fillRect(W*0.4,H*0.55,20,H*0.15);
+     ctx.fillRect(W*0.42,H*0.53,16,3);
+     // Heroine - looking at hero silently, slight lip movement
+     const herX=W*0.62;ctx.fillStyle='rgba(220,180,200,0.85)';
+     ctx.fillRect(herX-2.5,H*0.67,5,H*0.08);
+     ctx.fillRect(herX-2,H*0.63,4,2.5);
+     // Eyes glint
+     if(Math.sin(t*3)>0){
+       ctx.fillStyle='rgba(255,220,180,0.5)';
+       ctx.beginPath();ctx.arc(herX+1,H*0.645,1,0,Math.PI*2);ctx.fill();
+     }
+     // Hero sword glows
+     if(bt>0.5){
+       const glow=Math.sin(t*6)*0.3+0.5;
+       ctx.fillStyle=`rgba(255,200,100,${glow})`;
+       ctx.fillRect(heroX+6,H*0.66,20,2);
+       ctx.fillStyle=`rgba(255,200,100,${glow*0.3})`;
+       ctx.beginPath();ctx.arc(heroX+16,H*0.67,12,0,Math.PI*2);ctx.fill();
+     }
+   }
+  },
+  // Beat 1: First blade draw (14-18s)
+  {start:14,end:18, text:"拔出剑，圣光在黑暗中亮起",
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createRadialGradient(W*0.5,H*0.5,0,W*0.5,H*0.5,W);
+     grad.addColorStop(0,'#1a1525');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Sword rising with golden light
+     const swordAngle=-Math.PI*0.3+bt*Math.PI*0.7;
+     const sx=W*0.5,sy=H*0.55;
+     ctx.save();ctx.translate(sx,sy);ctx.rotate(swordAngle);
+     // Blade
+     const bladeLen=W*0.2*Math.min(bt*2,1);
+     const bladeGrad=ctx.createLinearGradient(0,0,bladeLen,0);
+     bladeGrad.addColorStop(0,'#fff8e0');bladeGrad.addColorStop(0.3,'#ffd700');bladeGrad.addColorStop(0.7,'#b8860b');bladeGrad.addColorStop(1,'#8b6914');
+     ctx.fillStyle=bladeGrad;ctx.fillRect(0,-3,bladeLen,6);
+     // Handle
+     ctx.fillStyle='#4a3020';ctx.fillRect(-15,-2,15,4);
+     ctx.restore();
+     // Golden light particles
+     if(bt>0.3)spawnParticles(sx+Math.cos(swordAngle)*bladeLen,sy+Math.sin(swordAngle)*bladeLen,1,'#ffd700',80,1.2,2.5);
+     // Ambient glow
+     if(bt>0.2){
+       const glowGrad=ctx.createRadialGradient(sx,sy,0,sx,sy,W*0.5);
+       glowGrad.addColorStop(0,`rgba(255,200,80,${bt*0.25})`);glowGrad.addColorStop(1,'transparent');
+       ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(sx,sy,W*0.5,0,Math.PI*2);ctx.fill();
+     }
+   }
+  },
+  // Beat 2-3: Battle montage (18-25s)
+  {start:18,end:25, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createLinearGradient(0,0,0,H);
+     grad.addColorStop(0,'#0a0512');grad.addColorStop(0.6,'#150a20');grad.addColorStop(1,'#0a0510');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Rapid slash effects
+     for(let i=0;i<4;i++){
+       const st=(bt*4-i)*0.25;if(st<0||st>1)continue;
+       const alpha=st<0.3?st/0.3:st>0.7?(1-st)/0.3:1;
+       const x=W*0.3+i*W*0.15,y=H*0.3+Math.sin(st*Math.PI)*H*0.25;
+       ctx.strokeStyle=`rgba(255,215,0,${alpha*0.7})`;
+       ctx.lineWidth=3*alpha;ctx.beginPath();
+       ctx.moveTo(x-20,y+10);ctx.lineTo(x+20,y-10);ctx.stroke();
+     }
+     // Dark figures falling
+     for(let i=0;i<3;i++){
+       const st2=(bt*3-i)*0.33;if(st2<0||st2>1)continue;
+       const x=W*0.25+i*W*0.2,y=H*0.5+st2*H*0.25;
+       ctx.fillStyle=`rgba(40,20,60,${(1-st2)*0.6})`;
+       ctx.fillRect(x-3,y,6,8);
+     }
+     // Spawn particles
+     if(Math.random()<0.4)spawnParticles(W*0.3+Math.random()*W*0.4,H*0.3+Math.random()*H*0.3,1,'#ffd700',60,0.8,2);
+   }
+  },
+  // Beat 4: Heroine enters (25-32s)
+  {start:25,end:32, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createRadialGradient(W*0.62,H*0.5,0,W*0.62,H*0.5,W);
+     grad.addColorStop(0,'#1a1225');grad.addColorStop(0.5,'#0d0818');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Heroine center - shield forming
+     const hx=W*0.62,hy=H*0.45;
+     if(bt>0.2){
+       const shieldAlpha=Math.min(1,(bt-0.2)*2);
+       ctx.strokeStyle=`rgba(180,200,255,${shieldAlpha*0.8})`;ctx.lineWidth=2;
+       ctx.beginPath();ctx.arc(hx,hy,35+Math.sin(t*3)*5,0,Math.PI*2);ctx.stroke();
+       // Inner hex pattern
+       for(let i=0;i<6;i++){
+         const a=i*Math.PI/3+bt*0.5,r=28;
+         ctx.beginPath();ctx.moveTo(hx+Math.cos(a)*r,hy+Math.sin(a)*r);
+         ctx.lineTo(hx+Math.cos(a+Math.PI/3)*r,hy+Math.sin(a+Math.PI/3)*r);
+         ctx.stroke();
+       }
+     }
+     // Heroine figure
+     ctx.fillStyle='#dcb4c8';
+     ctx.fillRect(hx-2.5,hy,5,H*0.08);ctx.fillRect(hx-2,hy-4,4,2.5);
+     // Mark appearing on enemy
+     if(bt>0.5){
+       const mx=W*0.35,my=H*0.55;
+       const mAlpha=(bt-0.5)*2;
+       ctx.strokeStyle=`rgba(255,100,100,${mAlpha*0.8})`;ctx.lineWidth=2;
+       ctx.beginPath();ctx.arc(mx,my,18,0,Math.PI*2);ctx.stroke();
+       ctx.beginPath();ctx.moveTo(mx-12,my-12);ctx.lineTo(mx+12,my+12);ctx.stroke();
+       ctx.beginPath();ctx.moveTo(mx+12,my-12);ctx.lineTo(mx-12,my+12);ctx.stroke();
+     }
+     // Particles
+     if(Math.random()<0.3){spawnParticles(hx,hy,1,'#c8d8ff',40,1,1.5);spawnParticles(W*0.35,H*0.55,1,'#ff6060',30,0.8,1.5)}
+   }
+  },
+  // Beat 5-6: Boss fight (32-42s)
+  {start:32,end:42, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     // Dramatic boss phase
+     const pulse=Math.sin(t*4)*0.3+0.5;
+     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+     // Dark god enraged
+     const dgGrad=ctx.createRadialGradient(W*0.5,H*0.3,0,W*0.5,H*0.3,W*0.7);
+     dgGrad.addColorStop(0,`rgba(60,10,80,${0.5+pulse})`);dgGrad.addColorStop(0.4,'rgba(30,5,50,0.8)');dgGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=dgGrad;ctx.beginPath();ctx.arc(W*0.5,H*0.3,W*0.7,0,Math.PI*2);ctx.fill();
+     // Dark tendrils
+     for(let i=0;i<6;i++){
+       const a=i*Math.PI/3+bt*2,r=W*0.3+Math.sin(bt*5+i)*W*0.1;
+       ctx.strokeStyle=`rgba(80,20,120,${0.4+pulse*0.4})`;ctx.lineWidth=1.5;
+       ctx.beginPath();ctx.moveTo(W*0.5,H*0.3);ctx.lineTo(W*0.5+Math.cos(a)*r,H*0.3+Math.sin(a)*r);ctx.stroke();
+     }
+     // Three heroes fighting
+     const trioAlpha=0.7+pulse*0.3;
+     [W*0.35,W*0.5,W*0.65].forEach((x,i)=>{
+       const y=H*0.6+Math.sin(t*6+i)*3;
+       ctx.fillStyle=`rgba(${i===0?'140,160,200':i===1?'200,180,160':'220,180,200'},${trioAlpha})`;
+       ctx.fillRect(x-2,y,4,H*0.09);ctx.fillRect(x-1.5,y-4,3,2.5);
+     });
+     // Impact flashes
+     if(bt>0.4&&bt<0.9&&Math.sin(t*12)>0.7){
+       flashAlpha=0.3;const fx=W*0.5+Math.random()*W*0.3-W*0.15,fy=H*0.4+Math.random()*H*0.2;
+       ctx.fillStyle='rgba(255,255,255,0.15)';ctx.beginPath();ctx.arc(fx,fy,30,0,Math.PI*2);ctx.fill();
+     }
+   }
+  },
+  // Beat 7: Dark god final strike (42-50s)
+  {start:42,end:50, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+     // Charge up
+     const chargeUp=bt<0.5?bt*2:1;
+     const dgCore=ctx.createRadialGradient(W*0.5,H*0.35,0,W*0.5,H*0.35,W*0.15*chargeUp);
+     dgCore.addColorStop(0,'#fff');dgCore.addColorStop(0.3,'#c040ff');dgCore.addColorStop(0.6,'#6010a0');dgCore.addColorStop(1,'transparent');
+     ctx.fillStyle=dgCore;ctx.beginPath();ctx.arc(W*0.5,H*0.35,W*0.2*chargeUp,0,Math.PI*2);ctx.fill();
+     // Hero and archmage thrown back
+     if(bt>0.45){
+       const throwB=(bt-0.45)/0.55;
+       ctx.fillStyle='rgba(200,180,160,0.7)';ctx.fillRect(W*0.2+throwB*W*0.15,H*0.65,5,H*0.08);
+       ctx.fillStyle='rgba(140,160,200,0.7)';ctx.fillRect(W*0.25+throwB*W*0.1,H*0.7,4,H*0.06);
+     }
+     // Heroine stands still
+     if(bt>0.55){
+       const hx=W*0.62,hy=H*0.6;
+       ctx.fillStyle='rgba(220,180,200,0.85)';ctx.fillRect(hx-2.5,hy,5,H*0.08);
+       ctx.fillRect(hx-2,hy-4,4,2.5);
+       // Dark purple marks appearing
+       if(bt>0.65){
+         const markAlpha=(bt-0.65)*3;
+         ctx.strokeStyle=`rgba(140,40,200,${Math.min(0.8,markAlpha)})`;ctx.lineWidth=2;
+         for(let i=0;i<3;i++){
+           const mx=hx-10+Math.random()*20,my=hy-15+Math.random()*30,ms=3+Math.random()*5;
+           ctx.beginPath();ctx.arc(mx,my,ms,0,Math.PI*2);ctx.stroke();
+         }
+       }
+     }
+   }
+  },
+  // Beat 8: The Seal (50-62s)
+  {start:50,end:62, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+     const hx=W*0.5,hy=H*0.45;
+     // Dark purple → golden transition
+     if(bt<0.35){
+       // Purple phase
+       const purpGrad=ctx.createRadialGradient(hx,hy,0,hx,hy,W*0.4);
+       purpGrad.addColorStop(0,'rgba(160,40,220,0.6)');purpGrad.addColorStop(1,'transparent');
+       ctx.fillStyle=purpGrad;ctx.beginPath();ctx.arc(hx,hy,W*0.4,0,Math.PI*2);ctx.fill();
+       // Dark markings flowing
+       for(let i=0;i<8;i++){
+         const a=i*Math.PI/4+bt*3,r=15+Math.sin(bt*10+i)*8;
+         ctx.strokeStyle=`rgba(140,40,200,0.7)`;ctx.lineWidth=1;
+         ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(hx+Math.cos(a)*r*3,hy+Math.sin(a)*r*3);ctx.stroke();
+       }
+     }else if(bt<0.7){
+       // Transition golden
+       const tB=(bt-0.35)/0.35;
+       const sealGrad=ctx.createRadialGradient(hx,hy,0,hx,hy,W*0.5);
+       sealGrad.addColorStop(0,`rgba(255,215,0,${0.3+tB*0.6})`);sealGrad.addColorStop(0.5,`rgba(255,180,50,${tB*0.4})`);sealGrad.addColorStop(1,'transparent');
+       ctx.fillStyle=sealGrad;ctx.beginPath();ctx.arc(hx,hy,W*0.5,0,Math.PI*2);ctx.fill();
+       // Seal rings
+       for(let i=0;i<3;i++){
+         ctx.strokeStyle=`rgba(255,215,0,${tB*(1-i*0.3)})`;ctx.lineWidth=2-i*0.5;
+         ctx.beginPath();ctx.arc(hx,hy,20+i*25+Math.sin(t*3+i)*10,0,Math.PI*2);ctx.stroke();
+       }
+       // Particles
+       if(Math.random()<0.6)spawnParticles(hx+(Math.random()-0.5)*80,hy+(Math.random()-0.5)*80,1,'#ffd700',50,1.5,2.5);
+     }else{
+       // Golden seal complete
+       const sealGrad=ctx.createRadialGradient(hx,hy,0,hx,hy,W*0.6);
+       sealGrad.addColorStop(0,'rgba(255,240,200,0.8)');sealGrad.addColorStop(0.4,'rgba(255,200,60,0.5)');sealGrad.addColorStop(1,'transparent');
+       ctx.fillStyle=sealGrad;ctx.beginPath();ctx.arc(hx,hy,W*0.6,0,Math.PI*2);ctx.fill();
+       // Complex seal pattern
+       for(let i=0;i<12;i++){
+         const a=i*Math.PI/6,r=35+Math.sin(t*2+i)*5;
+         ctx.strokeStyle='rgba(255,240,200,0.6)';ctx.lineWidth=1;
+         ctx.beginPath();ctx.moveTo(hx+Math.cos(a)*20,hy+Math.sin(a)*20);
+         ctx.lineTo(hx+Math.cos(a)*r,hy+Math.sin(a)*r);ctx.stroke();
+       }
+       spawnParticles(hx,hy,2,'#fff8e0',30,1.5,2);
+     }
+     // Heroine figure fading
+     if(bt>0.4){
+       const fAlpha=bt>0.7?Math.max(0,1-(bt-0.7)/0.3):1;
+       ctx.fillStyle=`rgba(220,180,200,${fAlpha*0.7})`;
+       ctx.fillRect(hx-2.5,hy+5,5,H*0.07);ctx.fillRect(hx-2,hy+1,4,2);
+     }
+   }
+  },
+  // Beat 8b: Her smile (62-68s)
+  {start:62,end:68, text:"「我们……会再见的。」",
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createRadialGradient(W*0.5,H*0.5,0,W*0.5,H*0.5,W*0.8);
+     grad.addColorStop(0,'#1a1510');grad.addColorStop(0.5,'#0a0808');grad.addColorStop(1,'#000');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Fading golden embers
+     for(const p of particles){
+       if(p.color==='#ffd700'||p.color==='#fff8e0'){
+         ctx.globalAlpha=p.life/p.maxLife*0.5;
+         ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*0.8,0,Math.PI*2);ctx.fill();
+       }
+     }
+     ctx.globalAlpha=1;
+     // Soft remaining glow
+     const glowGrad=ctx.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.45,W*0.25);
+     glowGrad.addColorStop(0,'rgba(255,200,100,0.2)');glowGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(W*0.5,H*0.45,W*0.25,0,Math.PI*2);ctx.fill();
+     // Last light - small golden spark floating
+     const sparkY=H*0.45-bt*H*0.15;
+     const sparkGrad=ctx.createRadialGradient(W*0.5,sparkY,0,W*0.5,sparkY,8);
+     sparkGrad.addColorStop(0,'rgba(255,240,200,0.9)');sparkGrad.addColorStop(1,'transparent');
+     ctx.fillStyle=sparkGrad;ctx.beginPath();ctx.arc(W*0.5,sparkY,8,0,Math.PI*2);ctx.fill();
+     // Archmage hand reaching
+     if(bt>0.3){
+       ctx.strokeStyle='rgba(140,160,200,0.6)';ctx.lineWidth=1.5;
+       ctx.beginPath();ctx.moveTo(W*0.38,H*0.7);ctx.lineTo(W*0.5,sparkY);ctx.stroke();
+     }
+   }
+  },
+  // Beat 8c: Hero closes eyes (68-72s)
+  {start:68,end:72, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+     // Close-up of hero face (abstract shapes)
+     const faceAlpha=1-bt;
+     ctx.fillStyle=`rgba(200,180,160,${faceAlpha*0.5})`;
+     ctx.fillRect(W*0.42,H*0.35,W*0.16,H*0.25);
+     // Eyes closing
+     const eyeClose=bt;
+     ctx.fillStyle='#000';
+     ctx.fillRect(W*0.45,H*0.42,15,3+eyeClose*5);ctx.fillRect(W*0.52,H*0.42,15,3+eyeClose*5);
+     // Vignette closing in
+     const vigGrad=ctx.createRadialGradient(W*0.5,H*0.45,(1-bt)*W*0.3,W*0.5,H*0.45,W*0.1);
+     vigGrad.addColorStop(0,'transparent');vigGrad.addColorStop(1,'#000');
+     ctx.fillStyle=vigGrad;ctx.fillRect(0,0,W,H);
+   }
+  },
+  // Beat 9: Awakening (72-80s)
+  {start:72,end:80, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     // Bright room transition
+     const bgt=Math.min(1,bt*2);
+     const grad=ctx.createLinearGradient(0,0,0,H);
+     grad.addColorStop(0,`rgb(${Math.round(100+bgt*80)},${Math.round(90+bgt*100)},${Math.round(80+bgt*120)})`);
+     grad.addColorStop(0.4,`rgb(${Math.round(80+bgt*100)},${Math.round(50+bgt*100)},${Math.round(40+bgt*100)})`);
+     grad.addColorStop(1,`rgb(${Math.round(30+bgt*40)},${Math.round(20+bgt*30)},${Math.round(15+bgt*25)})`);
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Window light beam
+     ctx.fillStyle=`rgba(255,250,235,${0.15+bt*0.2})`;
+     ctx.beginPath();ctx.moveTo(W*0.4,0);ctx.lineTo(W*0.3,H*0.6);ctx.lineTo(W*0.45,H*0.6);ctx.closePath();ctx.fill();
+     // Bed silhouette
+     ctx.fillStyle='#6b5040';ctx.fillRect(W*0.35,H*0.65,W*0.3,H*0.15);
+     ctx.fillStyle='#c8b4a0';ctx.fillRect(W*0.42,H*0.55,W*0.08,H*0.1);
+     // Hand on chest
+     if(bt>0.3){
+       ctx.fillStyle='#deb890';
+       ctx.beginPath();ctx.arc(W*0.46,H*0.58,6*Math.min(1,(bt-0.3)*2),0,Math.PI*2);ctx.fill();
+     }
+     // Bolt awake
+     if(bt>0.4){
+       const jolt=(bt-0.4)*2;
+       ctx.fillStyle=`rgba(200,180,160,${jolt*0.6})`;
+       ctx.fillRect(W*0.41-jolt*2,H*0.50+jolt*3,W*0.1+jolt*4,H*0.12);
+       // Eyes wide
+       ctx.fillStyle='#fff';ctx.fillRect(W*0.445,H*0.53,4,3);ctx.fillRect(W*0.465,H*0.53,4,3);
+       ctx.fillStyle='#2a1a10';ctx.fillRect(W*0.446,H*0.535,2,2);ctx.fillRect(W*0.466,H*0.535,2,2);
+     }
+     // Floating dust particles in light
+     if(Math.random()<0.5)spawnParticles(W*0.35+Math.random()*W*0.1,H*0.2+Math.random()*H*0.4,1,'#fff8dc',3,4,1);
+   }
+  },
+  // Beat 9b: Window opening (80-88s)
+  {start:80,end:88, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     const grad=ctx.createLinearGradient(0,0,0,H);
+     grad.addColorStop(0,'#b8d4f0');grad.addColorStop(0.5,'#8cb0d0');grad.addColorStop(1,'#5a4030');
+     ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     // Window frame
+     ctx.strokeStyle='#4a3020';ctx.lineWidth=4;
+     ctx.strokeRect(W*0.3,H*0.15,W*0.4,H*0.4);
+     ctx.beginPath();ctx.moveTo(W*0.5,H*0.15);ctx.lineTo(W*0.5,H*0.55);ctx.stroke();
+     // Outside - green leaves, blue sky
+     ctx.fillStyle='#7ab868';ctx.beginPath();ctx.arc(W*0.25,H*0.25,30,0,Math.PI*2);ctx.fill();
+     ctx.fillStyle='#5a9848';ctx.beginPath();ctx.arc(W*0.65,H*0.2,25,0,Math.PI*2);ctx.fill();
+     // Perspective pull back
+     const zoom=1+bt*0.3;
+     ctx.save();ctx.translate(W*0.5,H*0.5);ctx.scale(zoom,zoom);ctx.translate(-W*0.5,-H*0.5);
+     // Big tree silhouette
+     ctx.fillStyle='#3a6830';ctx.fillRect(W*0.44,H*0.1,12,H*0.7);
+     ctx.fillStyle='#4a8040';ctx.beginPath();ctx.arc(W*0.45,H*0.1,50,0,Math.PI*2);ctx.fill();
+     ctx.restore();
+     // Sun rays
+     for(let i=0;i<5;i++){
+       const a=-0.3+i*0.15,r=W;
+       ctx.strokeStyle=`rgba(255,240,200,${0.08+bt*0.1})`;
+       ctx.lineWidth=1;ctx.beginPath();
+       ctx.moveTo(W*0.45,H*0.1);ctx.lineTo(W*0.45+Math.cos(a)*r,H*0.1+Math.sin(a)*r);ctx.stroke();
+     }
+   }
+  },
+  // Epilogue + Title (88-100s)
+  {start:88,end:100, text:null,
+   draw(t){
+     const bt=(t-this.start)/(this.end-this.start);
+     // Fade to dark
+     const ft=bt<0.3?bt/0.3:1;
+     const bgt=bt>0.5?Math.max(0,1-(bt-0.5)/0.5):1;
+     if(bt<0.3){
+       const grad=ctx.createLinearGradient(0,0,0,H);
+       grad.addColorStop(0,`rgba(184,212,240,${1-ft})`);grad.addColorStop(1,`rgba(90,64,48,${1-ft})`);
+       ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+     }else{
+       ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+     }
+     // Chapter text fades in
+     if(bt>0.35){
+       titlecard.classList.add('show');
+     }
+     // Golden line
+     if(bt>0.2&&bt<0.5){
+       ctx.strokeStyle=`rgba(212,168,83,${(bt-0.2)*2})`;
+       ctx.lineWidth=1;ctx.beginPath();
+       ctx.moveTo(W*0.3,H*0.55);ctx.lineTo(W*0.7,H*0.55);ctx.stroke();
+     }
+   }
+  }
+];
+
+// === BEAT TIMING (total ~100s → condensed to ~85s for pacing) ===
+const beatTimes=[0,6,10,14,18,25,32,42,50,62,68,72,80,88];
+const beatTexts=[
+  null,null,"「站起来，愣着干嘛」",null,
+  "剑出鞘，圣光照亮黑暗",null,
+  "她只退了半步——胸口的暗紫色纹路，第一次浮现",null,
+  null,"「我们……会再见的。」",
+  null,null,null,
+  "神树村·清晨·第一章「成人仪式」"
+];
+
+let currentBeat=0, nextBeatTime=beatTimes[1]||6;
+let animFrame,lastTime=0;
+let running=true;
+
+function getCurrentBeat(time){
+  for(let i=beatTimes.length-1;i>=0;i--)if(time>=beatTimes[i])return i;
+  return 0;
+}
+
+function render(time){
+  if(!running)return;
+  const dt=lastTime?(time-lastTime)/1000:0.016;
+  lastTime=time;
+  t+=dt;
+
+  if(t>=beatTimes[beatTimes.length-1]){
+    // End reached, freeze at title card
+    titlecard.classList.add('show');
+    return;
+  }
+
+  currentBeat=getCurrentBeat(t);
+  if(currentBeat<beats.length&&beats[currentBeat]){
+    beats[currentBeat].draw(t);
+  }
+
+  // Update and draw particles
+  updateParticles(dt);
+  drawParticles();
+
+  // Flash overlay
+  if(flashAlpha>0){ctx.fillStyle=`rgba(255,255,255,${flashAlpha})`;ctx.fillRect(0,0,W,H);flashAlpha=Math.max(0,flashAlpha-dt*2);}
+
+  // Vignette
+  const vigGrad=ctx.createRadialGradient(W*0.5,H*0.5,W*0.45,W*0.5,H*0.5,W*0.9);
+  vigGrad.addColorStop(0,'transparent');vigGrad.addColorStop(1,`rgba(0,0,0,${vignetteAlpha})`);
+  ctx.fillStyle=vigGrad;ctx.fillRect(0,0,W,H);
+
+  // Subtitles
+  const textIdx=beatTexts.findIndex((txt,i)=>txt&&currentBeat>=i&&currentBeat<=i+1);
+  if(textIdx>=0&&beatTexts[textIdx]){
+    sub.textContent=beatTexts[textIdx];sub.classList.add('show');
+  }else{
+    sub.classList.remove('show');
+  }
+
+  animFrame=requestAnimationFrame(render);
+}
+
+// Override beat text system
+const origDraw=beats[3].draw;
+beats[3].text="「站起来，愣着干嘛」";
+beats[4].text=null;
+
+// Start
+function startAnim(){
+  lastTime=0;
+  titlecard.classList.remove('show');
+  animFrame=requestAnimationFrame(render);
+}
+
+function skipToEnd(){
+  running=false;cancelAnimationFrame(animFrame);
+  t=beatTimes[beatTimes.length-1];
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  titlecard.classList.add('show');
+  sub.classList.remove('show');
+}
+
+// Handle subtitle visibility with beats
+// For each beat, override text
+// beatIdx 2 (10-14s): archmage line
+// beatIdx 4 (18-25s): sword draw text  
+// beatIdx 6 (32-42s): her stumble text
+// beatIdx 9 (62-68s): her last words
+// beatIdx 13 (88-100s): chapter title
+
+startAnim();
+
+window.addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowRight')skipToEnd()});
+</script>
+</body>
+</html>

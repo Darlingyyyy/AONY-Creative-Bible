@@ -1,0 +1,14 @@
+.DS_Store
+*.tmp
+*.log
+
+# Keep generated/raw private material out of this creative repo.
+07_聊天记录/
+99_原始归档/
+work/
+
+# Large generated media should be added deliberately.
+*.psd
+*.clip
+*.kra
+
